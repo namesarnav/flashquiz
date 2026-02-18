@@ -133,59 +133,45 @@ Use multi-container Pods only when containers are **tightly coupled**:
 
 When you create a Pod, it goes through a predictable sequence of events. Understanding this deeply helps you debug problems.
 
-```plaintext
-                                    ┌──────────────────┐
-                                    │   Pod Created    │
-                                    │  (via API call)  │
-                                    └────────┬─────────┘
-                                             │
-                                             ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│                              PENDING PHASE                                 │
-│                                                                            │
-│  1. Pod stored in etcd                                                     │
-│  2. Scheduler assigns Pod to a Node                                        │
-│  3. Kubelet on that Node receives the Pod spec                             │
-│  4. Kubelet pulls container images                                         │
-│  5. Kubelet creates and starts init containers (if any)                    │
-│                                                                            │
-│  Pod Status: Pending                                                       │
-│  Possible Reasons:                                                         │
-│    - Waiting for scheduling (no suitable node)                             │
-│    - ImagePullBackOff (can't pull image)                                   │
-│    - Init containers running                                               │
-└────────────────────────────────────────────────────────────────────────────┘
-                                             │
-                                             │ All init containers complete
-                                             │ Main containers starting
-                                             ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│                              RUNNING PHASE                                 │
-│                                                                            │
-│  - At least one container is running, starting, or restarting              │
-│  - Pod has been bound to a node                                            │
-│  - This doesn't mean the app is "ready" (that's what readiness probes do)  │
-│                                                                            │
-│  Pod Status: Running                                                       │
-│  Container States: Running, Waiting, or Terminated                         │
-└────────────────────────────────────────────────────────────────────────────┘
-                                             │
-                          ┌──────────────────┴──────────────────┐
-                          │                                     │
-          All containers  │                                     │ At least one
-          exit with       │                                     │ container exits
-          code 0          │                                     │ with non-zero
-                          ▼                                     ▼
-               ┌───────────────────┐                 ┌───────────────────┐
-               │    SUCCEEDED      │                 │      FAILED       │
-               │                   │                 │                   │
-               │ - All containers  │                 │ - All containers  │
-               │   terminated      │                 │   terminated      │
-               │ - All exit code 0 │                 │ - At least one    │
-               │ - Won't restart   │                 │   exit code != 0  │
-               │                   │                 │ - Won't restart   │
-               │ Common for: Jobs  │                 │   (unless policy) │
-               └───────────────────┘                 └───────────────────┘
+```mermaid
+---
+title: Pod Lifecycle Phases
+---
+flowchart TD
+    PC["Pod Created<br/>(via API call)"] --> PENDING
+
+    subgraph PENDING["PENDING PHASE"]
+        P1["1. Pod stored in etcd"]
+        P2["2. Scheduler assigns Pod to Node"]
+        P3["3. Kubelet receives Pod spec"]
+        P4["4. Kubelet pulls container images"]
+        P5["5. Init containers run (if any)"]
+        P1 --> P2 --> P3 --> P4 --> P5
+    end
+
+    PENDING -->|"All init containers complete<br/>Main containers starting"| RUNNING
+
+    subgraph RUNNING["RUNNING PHASE"]
+        R1["At least one container running"]
+        R2["Pod bound to node"]
+        R3["Container States: Running, Waiting, or Terminated"]
+    end
+
+    RUNNING -->|"All containers exit<br/>with code 0"| SUCCEEDED
+    RUNNING -->|"At least one container<br/>exits with non-zero"| FAILED
+
+    subgraph SUCCEEDED["SUCCEEDED"]
+        S1["All containers terminated"]
+        S2["All exit code 0"]
+        S3["Won't restart"]
+        S4["Common for: Jobs"]
+    end
+
+    subgraph FAILED["FAILED"]
+        F1["All containers terminated"]
+        F2["At least one exit code != 0"]
+        F3["Won't restart (unless policy)"]
+    end
 ```
 
 ### Deep Dive into Each Phase
