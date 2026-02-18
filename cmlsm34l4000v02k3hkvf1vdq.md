@@ -138,7 +138,7 @@ When you create a Pod, it goes through a predictable sequence of events. Underst
 title: Pod Lifecycle Phases
 ---
 flowchart TD
-    PC["Pod Created<br/>(via API call)"] --> PENDING
+    PC["Pod Created (via API call)"] --> PENDING
 
     subgraph PENDING["PENDING PHASE"]
         P1["1. Pod stored in etcd"]
